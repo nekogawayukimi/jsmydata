@@ -59,4 +59,43 @@ describe.skipIf(!url)('dialecte MySQL / MariaDB', () => {
     expect(cols[0]?.type).toMatch(/^int(\(\d+\))? unsigned$/);
     expect(cols[1]).toMatchObject({ name: 'name', nullable: false, comment: 'Nom' });
   });
+
+  it('execute : origine des colonnes, CALL et clés uniques', async () => {
+    await conn.query(`INSERT INTO ${db}.artist (name) VALUES ('Satie')`);
+    const r = await conn.execute('SELECT a.id, a.name AS n, a.id, 1 AS one FROM artist a', { database: db });
+    expect(r.fields.map((f) => [f.name, f.table, f.column, f.schema])).toEqual([
+      ['id', 'artist', 'id', db],
+      ['n', 'artist', 'name', db],
+      ['id', 'artist', 'id', db],
+      ['one', null, null, null],
+    ]);
+    // Littéral 1 : BIGINT (chaîne, sans perte de précision) sous MySQL, INT (nombre) sous MariaDB.
+    expect(r.rows[0]?.slice(0, 3)).toEqual([1, 'Satie', 1]);
+    expect(String(r.rows[0]?.[3])).toBe('1');
+    const i = await conn.execute(`INSERT INTO artist (name) VALUES (?)`, { database: db, params: ['Ravel'] });
+    expect(i).toMatchObject({ returnsRows: false, affectedRows: 1, insertId: 2 });
+    expect(await conn.uniqueKeys(db, 'artist')).toEqual([['id']]);
+    expect(conn.backendId()).toBeGreaterThan(0);
+  });
+
+  it('annule une requête en cours (KILL QUERY)', async () => {
+    const u = new URL(url!);
+    const params = {
+      host: u.hostname,
+      port: Number(u.port || 3306),
+      user: decodeURIComponent(u.username),
+      password: decodeURIComponent(u.password),
+    };
+    const t0 = Date.now();
+    const running = conn.execute('SELECT SLEEP(10)').then(
+      (r) => r,
+      (e: unknown) => e,
+    );
+    await new Promise((r) => setTimeout(r, 300));
+    await mysqlDialect.cancel(params, conn.backendId()!);
+    // SLEEP interrompu renvoie 1 (MySQL) ou l'erreur 1317 (selon la version) : dans les deux cas, bien avant 10 s.
+    const res = await running;
+    expect(Date.now() - t0).toBeLessThan(5000);
+    expect(JSON.stringify(res)).toMatch(/1317|\[\["?1"?\]\]/);
+  });
 });

@@ -77,7 +77,7 @@ export type TableTab =
 /** Mêmes onglets, dans le même ordre, que phpMyAdmin 5.2. */
 export const SERVER_TABS: TabDef<ServerTab>[] = [
   { key: 'databases', label: 'databases', lot: 0 },
-  { key: 'sql', label: 'sql', lot: 1 },
+  { key: 'sql', label: 'sql', lot: 0 },
   { key: 'status', label: 'status', lot: 4 },
   { key: 'users', label: 'users', lot: 4, requires: 'users' },
   { key: 'export', label: 'export', lot: 3 },
@@ -92,8 +92,8 @@ export const SERVER_TABS: TabDef<ServerTab>[] = [
 
 export const DATABASE_TABS: TabDef<DatabaseTab>[] = [
   { key: 'structure', label: 'structure', lot: 0 },
-  { key: 'sql', label: 'sql', lot: 1 },
-  { key: 'search', label: 'search', lot: 1 },
+  { key: 'sql', label: 'sql', lot: 0 },
+  { key: 'search', label: 'search', lot: 0 },
   { key: 'query', label: 'query', lot: 5 },
   { key: 'export', label: 'export', lot: 3 },
   { key: 'import', label: 'import', lot: 3 },
@@ -108,11 +108,11 @@ export const DATABASE_TABS: TabDef<DatabaseTab>[] = [
 ];
 
 export const TABLE_TABS: TabDef<TableTab>[] = [
-  { key: 'browse', label: 'browse', lot: 1 },
+  { key: 'browse', label: 'browse', lot: 0 },
   { key: 'structure', label: 'structure', lot: 0 },
-  { key: 'sql', label: 'sql', lot: 1 },
-  { key: 'search', label: 'search', lot: 1 },
-  { key: 'insert', label: 'insert', lot: 1 },
+  { key: 'sql', label: 'sql', lot: 0 },
+  { key: 'search', label: 'search', lot: 0 },
+  { key: 'insert', label: 'insert', lot: 0 },
   { key: 'export', label: 'export', lot: 3 },
   { key: 'import', label: 'import', lot: 3 },
   { key: 'privileges', label: 'privileges', lot: 4, requires: 'users' },

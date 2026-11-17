@@ -5,12 +5,70 @@ import {
   type Connection,
   type ConnectionParams,
   type Dialect,
+  type ExecOptions,
+  type ExecResult,
   type QueryResult,
 } from '../types.js';
 
 const SYSTEM_DATABASES = new Set(['information_schema', 'mysql', 'performance_schema', 'sys']);
 
 type Mysql2 = typeof import('mysql2/promise');
+
+interface MysqlField {
+  name: string;
+  orgTable?: string;
+  orgName?: string;
+  db?: string;
+  columnType?: number;
+  type?: number;
+}
+
+/** Noms des types du protocole MySQL (mysql2 donne un numéro). */
+const MYSQL_TYPES: Record<number, string> = {
+  0: 'DECIMAL',
+  1: 'TINY',
+  2: 'SHORT',
+  3: 'LONG',
+  4: 'FLOAT',
+  5: 'DOUBLE',
+  6: 'NULL',
+  7: 'TIMESTAMP',
+  8: 'LONGLONG',
+  9: 'INT24',
+  10: 'DATE',
+  11: 'TIME',
+  12: 'DATETIME',
+  13: 'YEAR',
+  15: 'VARCHAR',
+  16: 'BIT',
+  245: 'JSON',
+  246: 'NEWDECIMAL',
+  247: 'ENUM',
+  248: 'SET',
+  249: 'TINY_BLOB',
+  250: 'MEDIUM_BLOB',
+  251: 'LONG_BLOB',
+  252: 'BLOB',
+  253: 'VAR_STRING',
+  254: 'STRING',
+  255: 'GEOMETRY',
+};
+
+function typeName(t: number | undefined): string | null {
+  return t === undefined ? null : (MYSQL_TYPES[t] ?? String(t));
+}
+
+/** Regroupe les colonnes par index ; écarte les clés contenant une colonne NULL (non fiables pour localiser une ligne). */
+export function groupKeys(rows: { idx: string; col: string; nullable: boolean }[]): string[][] {
+  const keys = new Map<string, { cols: string[]; nullable: boolean }>();
+  for (const r of rows) {
+    const k = keys.get(r.idx) ?? { cols: [], nullable: false };
+    k.cols.push(r.col);
+    k.nullable ||= r.nullable;
+    keys.set(r.idx, k);
+  }
+  return [...keys.values()].filter((k) => !k.nullable).map((k) => k.cols);
+}
 type MysqlConn = Awaited<ReturnType<Mysql2['createConnection']>>;
 
 function toNumber(v: unknown): number | null {
@@ -26,11 +84,16 @@ function wrap(err: unknown): DialectError {
 
 class MysqlConnection implements Connection {
   readonly engine = 'mysql' as const;
-  constructor(private readonly conn: MysqlConn) {}
+  private currentDb: string | undefined;
+
+  constructor(
+    private readonly conn: MysqlConn,
+    private readonly timeoutMs = 0,
+  ) {}
 
   async query(sql: string, params: unknown[] = [], database?: string): Promise<QueryResult> {
     try {
-      if (database) await this.conn.query(`USE ${quoteMysqlIdent(database)}`);
+      if (database) await this.use(database);
       const [result, fields] = await this.conn.query({ sql, values: params, rowsAsArray: false });
       if (Array.isArray(result)) {
         return {
@@ -126,6 +189,78 @@ class MysqlConnection implements Connection {
     }));
   }
 
+  private async use(database: string) {
+    if (database === this.currentDb) return;
+    await this.conn.query(`USE ${quoteMysqlIdent(database)}`);
+    this.currentDb = database;
+  }
+
+  async execute(sql: string, opts: ExecOptions = {}): Promise<ExecResult> {
+    try {
+      if (opts.database) await this.use(opts.database);
+      const [result, fields] = await this.conn.query({
+        sql,
+        values: opts.params,
+        rowsAsArray: true,
+        ...(this.timeoutMs > 0 ? { timeout: this.timeoutMs } : {}),
+      });
+      // CALL renvoie plusieurs jeux de résultats : on garde le premier, comme phpMyAdmin.
+      let rows = result as unknown;
+      let meta = fields as unknown;
+      if (Array.isArray(rows) && Array.isArray(meta) && Array.isArray(meta[0])) {
+        rows = (rows as unknown[])[0];
+        meta = (meta as unknown[])[0];
+      }
+      // « USE autre_base » saisi par l'utilisateur : la base courante n'est plus connue.
+      if (/^\s*use\s/i.test(sql)) this.currentDb = undefined;
+      if (Array.isArray(rows)) {
+        const list = rows as unknown[][];
+        const max = opts.maxRows ?? Infinity;
+        return {
+          returnsRows: true,
+          fields: ((meta as MysqlField[]) ?? []).map((f) => ({
+            name: f.name,
+            table: f.orgTable || null,
+            column: f.orgName || null,
+            schema: f.db || null,
+            type: typeName(f.columnType ?? f.type),
+          })),
+          rows: list.length > max ? list.slice(0, max) : list,
+          truncated: list.length > max,
+        };
+      }
+      const header = rows as { affectedRows?: number; insertId?: number };
+      return {
+        returnsRows: false,
+        fields: [],
+        rows: [],
+        affectedRows: header.affectedRows ?? 0,
+        insertId: header.insertId ? header.insertId : null,
+      };
+    } catch (err) {
+      throw wrap(err);
+    }
+  }
+
+  async uniqueKeys(database: string, table: string): Promise<string[][]> {
+    const { rows } = await this.query(
+      `SELECT s.INDEX_NAME AS idx, s.COLUMN_NAME AS col, c.IS_NULLABLE AS nullable
+         FROM information_schema.STATISTICS s
+         JOIN information_schema.COLUMNS c
+           ON c.TABLE_SCHEMA = s.TABLE_SCHEMA AND c.TABLE_NAME = s.TABLE_NAME AND c.COLUMN_NAME = s.COLUMN_NAME
+        WHERE s.TABLE_SCHEMA = ? AND s.TABLE_NAME = ? AND s.NON_UNIQUE = 0
+        ORDER BY s.INDEX_NAME = 'PRIMARY' DESC, s.INDEX_NAME, s.SEQ_IN_INDEX`,
+      [database, table],
+    );
+    return groupKeys(
+      rows.map((r) => ({ idx: String(r.idx), col: String(r.col), nullable: String(r.nullable) === 'YES' })),
+    );
+  }
+
+  backendId(): number | null {
+    return this.conn.threadId ?? null;
+  }
+
   async close() {
     await this.conn.end().catch(() => this.conn.destroy());
   }
@@ -151,6 +286,16 @@ export const mysqlDialect: Dialect = {
   },
   quoteIdent: quoteMysqlIdent,
   quoteLiteral: quoteMysqlLiteral,
+  qualify: (database, table) => `${quoteMysqlIdent(database)}.${quoteMysqlIdent(table)}`,
+  placeholder: () => '?',
+  async cancel(params: ConnectionParams, backendId: number) {
+    const c = await mysqlDialect.connect({ ...params, database: undefined });
+    try {
+      await c.query(`KILL QUERY ${Math.floor(backendId)}`);
+    } finally {
+      await c.close();
+    }
+  },
   async connect(params: ConnectionParams): Promise<Connection> {
     const mysql: Mysql2 = await import('mysql2/promise');
     try {
@@ -169,7 +314,7 @@ export const mysqlDialect: Dialect = {
         multipleStatements: false,
         charset: 'utf8mb4',
       });
-      return new MysqlConnection(conn);
+      return new MysqlConnection(conn, params.queryTimeoutMs ?? 0);
     } catch (err) {
       throw wrap(err);
     }

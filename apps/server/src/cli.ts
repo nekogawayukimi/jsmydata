@@ -7,6 +7,7 @@ import { createApp } from './app.js';
 import { assertSafeListen, loadConfig } from './config.js';
 import { detectLocalServers } from './detect.js';
 import { resolveSecret } from './secret.js';
+import { createSessionStore } from './session-store.js';
 import { APP_VERSION } from './version.js';
 
 const HELP = `JsMyData ${APP_VERSION} — administration web MySQL/MariaDB, PostgreSQL et SQLite
@@ -61,6 +62,7 @@ async function main() {
     resolve(here, '../../web/dist'),
   ].find((d): d is string => Boolean(d && existsSync(resolve(d, 'index.html'))));
 
+  const sessionStore = await createSessionStore(config, logger);
   const { app, manager } = createApp({
     config,
     servers,
@@ -68,6 +70,7 @@ async function main() {
     logger,
     webDir,
     defaultConfig: loaded.source === 'default',
+    sessionStore,
   });
 
   const httpServer = app.listen(config.listen.port, config.listen.host, () => {

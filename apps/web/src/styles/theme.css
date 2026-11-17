@@ -1,5 +1,5 @@
 /*
- * Thème « pmahomme » de JsMyData — variantes claire et sombre.
+ * Thème « jmd-default » de JsMyData (inspiré de pmahomme) — variantes claire et sombre.
  * Toutes les couleurs passent par des variables : un thème tiers redéfinit ces jetons.
  * Contrastes vérifiés WCAG AA pour le texte courant dans les deux modes.
  */
@@ -49,6 +49,11 @@
   --focus: #2f7ab0;
   --badge-bg: #dddddd;
   --code-bg: rgba(0, 0, 0, 0.05);
+  --sql-keyword: #990099;
+  --sql-string: #008000;
+  --sql-number: #0000aa;
+  --sql-type: #aa5500;
+  --row-marked: #ffcc99;
 }
 
 :root[data-theme='dark'] {
@@ -95,6 +100,11 @@
   --focus: #7fb8e6;
   --badge-bg: #3a3e44;
   --code-bg: rgba(255, 255, 255, 0.07);
+  --sql-keyword: #d79bea;
+  --sql-string: #9ed98a;
+  --sql-number: #8fb8ff;
+  --sql-type: #f0b36a;
+  --row-marked: #4a3a22;
 }
 
 * {
@@ -216,6 +226,7 @@ code {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  height: 100%;
 }
 
 .main-header {
@@ -601,4 +612,297 @@ table.data tr.muted td {
   .icon-button {
     transition: background-color 0.12s;
   }
+}
+
+/* ---------- Lot 1 : requêtes, grilles, formulaires, console ---------- */
+.sql-box {
+  background: var(--code-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 3px;
+  padding: 6px 8px;
+  margin: 6px 0 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--text);
+  max-height: 240px;
+  overflow: auto;
+}
+.sql-links {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--link);
+  cursor: pointer;
+  font: inherit;
+}
+.link-button:hover {
+  color: var(--link-hover);
+  text-decoration: underline;
+}
+.link-button.danger {
+  color: var(--error-text);
+}
+.button-link {
+  display: inline-block;
+  text-decoration: none !important;
+}
+.grid-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 4px 0 8px;
+}
+.grid-toolbar .help {
+  color: var(--text-muted);
+}
+.grid-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+table.grid td {
+  white-space: nowrap;
+  max-width: 480px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+table.grid td .pre {
+  white-space: pre-wrap;
+}
+table.grid td.null em,
+table.data td.null {
+  color: var(--text-muted);
+  font-style: italic;
+}
+table.grid td.editable {
+  cursor: text;
+}
+table.grid tbody tr.marked {
+  background: var(--row-marked);
+}
+table.grid th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+table.grid th.sortable:hover {
+  color: var(--link);
+}
+.sort-mark {
+  font-size: 0.8em;
+}
+.grid-actions {
+  white-space: nowrap;
+}
+.grid-actions .link-button {
+  margin-left: 6px;
+}
+.grid-actions-col {
+  width: 1%;
+}
+td.editing {
+  padding: 2px !important;
+  overflow: visible !important;
+  max-width: none !important;
+}
+.cell-editor input,
+.cell-editor textarea {
+  width: 100%;
+  min-width: 180px;
+}
+.cell-editor-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 3px;
+}
+.cell-editor-actions button {
+  padding: 1px 8px;
+}
+.grid-bulk {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 4px 0 12px;
+}
+.pager {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 6px 0 8px;
+}
+.pager button {
+  padding: 2px 10px;
+}
+.is-fetching {
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+.sql-layout {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.sql-main {
+  flex: 1;
+  min-width: 0;
+}
+.sql-editor .cm-editor {
+  max-height: 60vh;
+}
+.sql-fallback {
+  width: 100%;
+  font-family: ui-monospace, monospace;
+}
+.sql-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.sql-buttons button {
+  padding: 2px 10px;
+}
+.sql-columns {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 200px;
+}
+.sql-columns select {
+  width: 100%;
+}
+.sql-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+}
+.statement-result {
+  margin-bottom: 18px;
+}
+.history summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.history-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+}
+.history-list li {
+  padding: 3px 0;
+  border-bottom: 1px dotted var(--panel-border);
+}
+.history-list li.history-error code {
+  color: var(--error-text);
+}
+.history-verb {
+  font-weight: 600;
+  color: var(--sql-keyword);
+}
+
+.insert-table th[scope='row'] {
+  text-align: right;
+  white-space: nowrap;
+}
+.insert-table[aria-disabled='true'] {
+  opacity: 0.5;
+}
+.insert-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 14px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.radio-line {
+  display: block;
+}
+details.panel > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+details.panel[open] > summary {
+  margin-bottom: 8px;
+}
+
+/* Console SQL (Ctrl+Alt+C) */
+.console {
+  border-top: 1px solid var(--header-border);
+  background: var(--panel-bg);
+  flex: none;
+}
+.console-bar {
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-radius: 0;
+  background: var(--header-bg);
+  color: var(--text);
+  padding: 3px 12px;
+  font-size: 12px;
+}
+.console-body {
+  display: flex;
+  flex-direction: column;
+  height: 34vh;
+  min-height: 180px;
+}
+.console-log {
+  flex: 1;
+  overflow: auto;
+  padding: 6px 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+.console-entry {
+  border-bottom: 1px dotted var(--panel-border);
+  padding: 4px 0;
+}
+.console-entry.error .console-info {
+  color: var(--error-text);
+}
+.console-sql {
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--sql-keyword);
+}
+.console-info {
+  color: var(--text-muted);
+}
+.console-input {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  padding: 6px 12px 8px;
+  border-top: 1px solid var(--panel-border);
+  flex-wrap: wrap;
+}
+.console-input .help {
+  flex-basis: 100%;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.console-input textarea {
+  flex: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  min-width: 200px;
+}
+.console-actions {
+  display: flex;
+  gap: 6px;
+}
+table.data.compact th,
+table.data.compact td {
+  padding: 1px 6px;
+  font-size: 12px;
 }
