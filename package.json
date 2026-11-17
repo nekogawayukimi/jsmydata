@@ -20,7 +20,8 @@
     "test": "vitest run",
     "typecheck": "tsc -p packages/shared && tsc -p packages/sql && tsc -p apps/server && tsc -p apps/web",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "start:local": "node scripts/start-local.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
