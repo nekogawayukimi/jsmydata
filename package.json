@@ -1,0 +1,41 @@
+{
+  "name": "jsmydata-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "description": "JsMyData — administration web de bases MySQL/MariaDB, PostgreSQL et SQLite, alternative React/Express à phpMyAdmin",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "npm run dev --workspace @jsmydata/server & npm run dev --workspace @jsmydata/web",
+    "dev:server": "npm run dev --workspace @jsmydata/server",
+    "dev:web": "npm run dev --workspace @jsmydata/web",
+    "build": "npm run build --workspace @jsmydata/web && npm run build --workspace @jsmydata/server",
+    "start": "node apps/server/dist/cli.js",
+    "test": "vitest run",
+    "typecheck": "tsc -p packages/shared && tsc -p packages/sql && tsc -p apps/server && tsc -p apps/web",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "start:local": "node scripts/start-local.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.6.6",
+    "@types/supertest": "^7.2.1",
+    "eslint": "^10.15.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.14.0",
+    "prettier": "^3.10.1",
+    "supertest": "^7.3.2",
+    "tsup": "^9.0.0",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.73.0",
+    "vitest": "^5.1.0"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "listen": { "host": "127.0.0.1", "port": 8080 },
+  "blowfishSecret": "remplacez-par-au-moins-32-caracteres-aleatoires",
+  "Servers": [
+    {
+      "verbose": "MySQL local",
+      "engine": "mysql",
+      "host": "127.0.0.1",
+      "port": 3306,
+      "auth_type": "cookie",
+      "AllowRoot": true,
+      "AllowNoPassword": false
+    },
+    {
+      "id": "pg",
+      "verbose": "PostgreSQL local",
+      "engine": "postgres",
+      "host": "127.0.0.1",
+      "port": 5432,
+      "database": "postgres"
+    },
+    {
+      "id": "sqlite",
+      "verbose": "Fichiers SQLite",
+      "engine": "sqlite"
+    }
+  ],
+  "SqliteDir": "./data",
+  "LoginCookieValidity": 1440,
+  "DefaultLang": "auto",
+  "ThemeColorMode": "auto",
+  "ThemeColorModeAllowChange": true
+}
