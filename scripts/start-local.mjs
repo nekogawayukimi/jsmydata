@@ -28,9 +28,16 @@ function run(args) {
   if (r.status !== 0) process.exit(r.status ?? 1);
 }
 
-// 1. Dépendances : réinstallées si package-lock.json a changé depuis la dernière installation.
+// 1. Dépendances : réinstallées si package-lock.json a changé ou si l'installation est incomplète.
+//    --include=dev : les gestionnaires de processus fixent souvent NODE_ENV=production,
+//    ce qui ferait sauter les outils de compilation (Vite, tsup).
 const installed = join(root, 'node_modules', '.package-lock.json');
-if (mtime(join(root, 'package-lock.json')) > mtime(installed)) run(['ci', '--no-audit', '--no-fund']);
+const complete = ['vite', 'tsup', 'better-sqlite3/package.json'].every((p) =>
+  existsSync(join(root, 'node_modules', p)),
+);
+if (!complete || mtime(join(root, 'package-lock.json')) > mtime(installed)) {
+  run(['ci', '--include=dev', '--no-audit', '--no-fund']);
+}
 
 // 2. Compilation : relancée si une source est plus récente que le serveur compilé.
 const built = join(root, 'apps', 'server', 'dist', 'cli.js');
