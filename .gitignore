@@ -1,0 +1,15 @@
+node_modules/
+dist/
+coverage/
+*.log
+.env
+.env.*
+jsmydata.config.json
+jsmydata.config.yaml
+*.sqlite
+*.db
+.DS_Store
+.vscode/
+.idea/
+playwright-report/
+test-results/
