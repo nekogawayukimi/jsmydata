@@ -92,7 +92,7 @@ function TableList({ db, schema, lang }: { db: string; schema?: string; lang: st
           {list.map((tb) => (
             <tr key={tb.name}>
               <td>
-                <Link to={paths.table(server.id, db, tb.name, 'structure', schema)}>
+                <Link to={paths.table(server.id, db, tb.name, 'browse', schema)}>
                   <Icon name={tb.kind === 'table' ? 'table' : 'view'} /> {tb.name}
                 </Link>
               </td>

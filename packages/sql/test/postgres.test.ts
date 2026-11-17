@@ -83,4 +83,54 @@ describe.skipIf(!url)('dialecte PostgreSQL', () => {
   it('remonte le SQLSTATE en cas d’erreur', async () => {
     await expect(conn.query('SELECT * FROM absente', [], db)).rejects.toMatchObject({ sqlState: '42P01' });
   });
+
+  it('execute : origine des colonnes résolue via le catalogue, search_path', async () => {
+    await conn.query(`INSERT INTO music.artist (name) VALUES ('Satie')`, [], db);
+    const r = await conn.execute('SELECT a.id, a.name, a.id AS id, now() IS NOT NULL AS ok FROM artist a', {
+      database: db,
+      schema: 'music',
+    });
+    expect(r.fields.map((f) => [f.name, f.table, f.column, f.schema])).toEqual([
+      ['id', 'artist', 'id', 'music'],
+      ['name', 'artist', 'name', 'music'],
+      ['id', 'artist', 'id', 'music'],
+      ['ok', null, null, null],
+    ]);
+    expect(r.fields[0]?.type).toBe('integer');
+    expect(r.rows).toEqual([[1, 'Satie', 1, true]]);
+    const u = await conn.execute('UPDATE artist SET name = $1 WHERE id = $2', {
+      database: db,
+      schema: 'music',
+      params: ['Erik Satie', 1],
+    });
+    expect(u).toMatchObject({ returnsRows: false, affectedRows: 1 });
+  });
+
+  it('clés uniques et identifiant de processus', async () => {
+    await conn.query(
+      'CREATE TABLE music.k (a int NOT NULL, b text NOT NULL, c text UNIQUE, UNIQUE (b), PRIMARY KEY (a, b))',
+      [],
+      db,
+    );
+    expect(await conn.uniqueKeys(db, 'k', 'music')).toEqual([['a', 'b'], ['b']]);
+    expect(conn.backendId(db)).toBeGreaterThan(0);
+  });
+
+  it('annule une requête en cours', async () => {
+    const u = new URL(url!);
+    const params = {
+      host: u.hostname,
+      port: Number(u.port || 5432),
+      user: decodeURIComponent(u.username),
+      password: decodeURIComponent(u.password),
+    };
+    // Gestionnaire branché tout de suite : l'annulation peut aboutir avant la fin de cancel().
+    const running = conn.execute('SELECT pg_sleep(10)', { database: db }).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    await new Promise((r) => setTimeout(r, 300));
+    await postgresDialect.cancel(params, conn.backendId(db)!);
+    expect(await running).toMatchObject({ sqlState: '57014' });
+  });
 });

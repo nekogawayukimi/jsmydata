@@ -251,9 +251,9 @@ function TableNode(props: { table: TableInfo; server: SessionServer; db: string;
   return (
     <li role="treeitem" aria-expanded={open} className={active ? 'tree-active' : undefined}>
       <Toggle open={open} onClick={() => setOpen(!open)} label={`${t('nav.columns')} ${props.table.name}`} />
-      {/* Lot 0 : le lien ouvre la structure ; il ouvrira « Parcourir » au lot 1, comme phpMyAdmin. */}
+      {/* Comme phpMyAdmin : un clic sur une table ouvre « Parcourir ». */}
       <Link
-        to={paths.table(props.server.id, props.db, props.table.name, 'structure', props.schema)}
+        to={paths.table(props.server.id, props.db, props.table.name, 'browse', props.schema)}
         className="tree-link"
       >
         <Icon name={props.table.kind === 'table' ? 'table' : 'view'} /> {props.table.name}

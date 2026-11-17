@@ -31,8 +31,8 @@ export function Home() {
           </div>
           <div className="form-row">
             <label htmlFor="home-theme">{t('home.theme')}</label>
-            <select id="home-theme" value="pmahomme" disabled>
-              <option value="pmahomme">pmahomme</option>
+            <select id="home-theme" value="jmd-default" disabled>
+              <option value="jmd-default">jmd-default</option>
             </select>
           </div>
           <div className="form-row">

@@ -1,10 +1,13 @@
 import type { ColumnInfo, DatabaseInfo, SchemaInfo, TableInfo } from '@jsmydata/shared';
+import { firstKeyword } from '../analyze.js';
 import { quoteAnsiIdent, quoteAnsiLiteral } from '../quote.js';
 import {
   DialectError,
   type Connection,
   type ConnectionParams,
   type Dialect,
+  type ExecOptions,
+  type ExecResult,
   type QueryResult,
 } from '../types.js';
 
@@ -115,6 +118,75 @@ class SqliteConnection implements Connection {
     });
   }
 
+  async execute(sql: string, opts: ExecOptions = {}): Promise<ExecResult> {
+    try {
+      const stmt = this.db.prepare(sql);
+      const params = opts.params ?? [];
+      if (stmt.reader) {
+        stmt.safeIntegers(true);
+        const fields = stmt.columns().map((c) => ({
+          name: c.name,
+          table: c.table ?? null,
+          column: c.column ?? null,
+          schema: c.database ?? null,
+          type: c.type ?? null,
+        }));
+        const max = opts.maxRows ?? Infinity;
+        const rows: unknown[][] = [];
+        let truncated = false;
+        for (const row of stmt.raw(true).iterate(...params) as Iterable<unknown[]>) {
+          if (rows.length >= max) {
+            truncated = true;
+            break;
+          }
+          rows.push(row);
+        }
+        return { returnsRows: true, fields, rows, truncated };
+      }
+      const info = stmt.run(...params);
+      const verb = firstKeyword(sql, 'sqlite');
+      return {
+        returnsRows: false,
+        fields: [],
+        rows: [],
+        affectedRows: info.changes,
+        insertId:
+          (verb === 'INSERT' || verb === 'REPLACE') && info.changes > 0 ? String(info.lastInsertRowid) : null,
+      };
+    } catch (err) {
+      throw wrap(err);
+    }
+  }
+
+  async uniqueKeys(database: string, table: string): Promise<string[][]> {
+    const cols = await this.query(
+      `SELECT name, pk, "notnull" AS nn FROM pragma_table_xinfo(?, ?) ORDER BY pk`,
+      [table, database],
+    );
+    const keys: string[][] = [];
+    const pk = cols.rows.filter((r) => Number(r.pk) > 0).map((r) => String(r.name));
+    if (pk.length) keys.push(pk);
+    const notNull = new Set(cols.rows.filter((r) => Number(r.nn) === 1).map((r) => String(r.name)));
+    const idx = await this.query(
+      `SELECT name FROM pragma_index_list(?, ?) WHERE "unique" = 1 AND origin <> 'pk' AND partial = 0 ORDER BY name`,
+      [table, database],
+    );
+    for (const r of idx.rows) {
+      const parts = await this.query(`SELECT name FROM pragma_index_info(?, ?) ORDER BY seqno`, [
+        String(r.name),
+        database,
+      ]);
+      const names = parts.rows.map((p) => (p.name === null ? null : String(p.name)));
+      if (names.length && names.every((n): n is string => n !== null && notNull.has(n)))
+        keys.push(names as string[]);
+    }
+    return keys;
+  }
+
+  backendId(): number | null {
+    return null;
+  }
+
   async close() {
     this.db.close();
   }
@@ -140,6 +212,11 @@ export const sqliteDialect: Dialect = {
   },
   quoteIdent: quoteAnsiIdent,
   quoteLiteral: quoteAnsiLiteral,
+  qualify: (database, table) => `${quoteAnsiIdent(database)}.${quoteAnsiIdent(table)}`,
+  placeholder: () => '?',
+  async cancel() {
+    throw new DialectError('SQLite ne permet pas d’annuler une requête en cours.', 'CANCEL_UNSUPPORTED');
+  },
   async connect(params: ConnectionParams): Promise<Connection> {
     if (!params.file) throw new DialectError('Aucun fichier SQLite indiqué', 'SQLITE_NO_FILE');
     const mod = await import('better-sqlite3');
@@ -147,6 +224,15 @@ export const sqliteDialect: Dialect = {
     try {
       const db = new Database(params.file, { readonly: params.readOnly ?? false, fileMustExist: false });
       db.pragma('foreign_keys = ON');
+      // REGEXP n'existe pas nativement dans SQLite : fonction fournie pour l'onglet Rechercher.
+      db.function('regexp', { deterministic: true }, (pattern: unknown, value: unknown) => {
+        if (pattern === null || value === null) return null;
+        try {
+          return new RegExp(String(pattern), 'u').test(String(value)) ? 1 : 0;
+        } catch {
+          return 0;
+        }
+      });
       return new SqliteConnection(db, params.file);
     } catch (err) {
       throw wrap(err);

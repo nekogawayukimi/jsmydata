@@ -4,6 +4,17 @@ import {
   type ApiErrorBody,
   type ColumnInfo,
   type DatabaseInfo,
+  type DbSearchRequest,
+  type DbSearchResponse,
+  type DeleteRowsRequest,
+  type InsertRowsRequest,
+  type MutationResponse,
+  type SortSpec,
+  type SqlRequest,
+  type SqlResponse,
+  type StatementResult,
+  type TableSearchRequest,
+  type UpdateRowRequest,
   type LoginRequest,
   type MeResponse,
   type SchemaInfo,
@@ -77,7 +88,67 @@ export const api = {
       (r) => r.tables,
     ),
   columns: (srv: string, db: string, table: string, schema?: string) =>
-    call<{ columns: ColumnInfo[] }>(
+    api.tableMeta(srv, db, table, schema).then((r) => r.columns),
+  tableMeta: (srv: string, db: string, table: string, schema?: string) =>
+    call<{ columns: ColumnInfo[]; uniqueKeys: string[][] }>(
       `/srv/${enc(srv)}/db/${enc(db)}/tables/${enc(table)}/columns${schemaQuery(schema)}`,
-    ).then((r) => r.columns),
+    ),
+
+  sql: (srv: string, req: SqlRequest) =>
+    call<SqlResponse>(`/srv/${enc(srv)}/sql`, { method: 'POST', body: req }),
+  cancel: (srv: string) =>
+    call<{ cancelled: boolean }>(`/srv/${enc(srv)}/sql/cancel`, { method: 'POST', body: {} }),
+
+  browse: (
+    srv: string,
+    db: string,
+    table: string,
+    opts: { schema?: string; offset: number; count: number; sort: SortSpec[]; showAll?: boolean },
+  ) => {
+    const q = new URLSearchParams();
+    if (opts.schema) q.set('schema', opts.schema);
+    q.set('offset', String(opts.offset));
+    q.set('count', String(opts.count));
+    if (opts.showAll) q.set('showAll', '1');
+    for (const s of opts.sort) q.append('sort', `${s.dir}:${s.column}`);
+    return call<StatementResult>(`/srv/${enc(srv)}/db/${enc(db)}/tables/${enc(table)}/rows?${q}`);
+  },
+
+  insertRows: (srv: string, db: string, table: string, schema: string | undefined, body: InsertRowsRequest) =>
+    call<MutationResponse>(`/srv/${enc(srv)}/db/${enc(db)}/tables/${enc(table)}/rows${schemaQuery(schema)}`, {
+      method: 'POST',
+      body,
+    }),
+  updateRow: (srv: string, db: string, table: string, schema: string | undefined, body: UpdateRowRequest) =>
+    call<MutationResponse>(`/srv/${enc(srv)}/db/${enc(db)}/tables/${enc(table)}/rows${schemaQuery(schema)}`, {
+      method: 'PATCH',
+      body,
+    }),
+  deleteRows: (srv: string, db: string, table: string, schema: string | undefined, body: DeleteRowsRequest) =>
+    call<MutationResponse>(`/srv/${enc(srv)}/db/${enc(db)}/tables/${enc(table)}/rows${schemaQuery(schema)}`, {
+      method: 'DELETE',
+      body,
+    }),
+
+  searchTable: (
+    srv: string,
+    db: string,
+    table: string,
+    schema: string | undefined,
+    body: TableSearchRequest,
+  ) =>
+    call<StatementResult>(
+      `/srv/${enc(srv)}/db/${enc(db)}/tables/${enc(table)}/search${schemaQuery(schema)}`,
+      {
+        method: 'POST',
+        body,
+      },
+    ),
+  searchDb: (srv: string, db: string, schema: string | undefined, body: DbSearchRequest) =>
+    call<DbSearchResponse>(`/srv/${enc(srv)}/db/${enc(db)}/search${schemaQuery(schema)}`, {
+      method: 'POST',
+      body,
+    }),
 };
+
+export type { ColumnInfo };

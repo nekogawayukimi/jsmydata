@@ -65,6 +65,8 @@ export async function detectLocalServers(opts: DetectOptions): Promise<ServerCon
     engine: 'mysql',
     verbose: 'MySQL / MariaDB (localhost)',
     ...(mysqlSocket ? { socket: mysqlSocket } : { host: '127.0.0.1', port: 3306 }),
+    // Par socket local, les comptes sans mot de passe (unix_socket de MariaDB/Homebrew) sont courants.
+    AllowNoPassword: Boolean(mysqlSocket),
     autoDetected: Boolean(mysqlSocket || mysqlTcp),
   });
 
@@ -78,6 +80,8 @@ export async function detectLocalServers(opts: DetectOptions): Promise<ServerCon
       engine: 'postgres',
       verbose: 'PostgreSQL (localhost)',
       ...(pgDir ? { socket: pgDir } : { host: '127.0.0.1' }),
+      // Authentification « peer » par socket local : pas de mot de passe.
+      AllowNoPassword: Boolean(pgDir),
       port: 5432,
       database: 'postgres',
     });

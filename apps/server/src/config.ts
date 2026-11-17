@@ -20,7 +20,11 @@ export const serverSchema = z.object({
   host: z.string().optional(),
   port: z.coerce.number().int().positive().optional(),
   socket: z.string().optional(),
-  auth_type: z.enum(['cookie', 'config']).default('cookie'),
+  auth_type: z.enum(['cookie', 'config', 'http', 'signon']).default('cookie'),
+  /** signon : page de l'application tierce qui authentifie l'utilisateur. */
+  SignonURL: z.string().url().optional(),
+  /** signon : URL de retour après déconnexion. */
+  LogoutURL: z.string().url().optional(),
   user: z.string().optional(),
   password: z.string().optional(),
   /** PostgreSQL : base de connexion initiale. */
@@ -48,7 +52,7 @@ export const configSchema = z.object({
   Servers: z.array(serverSchema).default([]),
   LoginCookieValidity: z.coerce.number().int().positive().default(1440),
   DefaultLang: z.string().default('auto'),
-  ThemeDefault: z.string().default('pmahomme'),
+  ThemeDefault: z.string().default('jmd-default'),
   ThemeColorMode: z.enum(['auto', 'light', 'dark']).default('auto'),
   ThemeColorModeAllowChange: z.boolean().default(true),
   SqliteDir: z.string().optional(),
@@ -57,6 +61,25 @@ export const configSchema = z.object({
   ForceSSL: z.boolean().default(false),
   /** Nombre d'échecs de connexion tolérés par IP sur 5 minutes. */
   LoginMaxFailures: z.coerce.number().int().positive().default(10),
+  /** Autorise la saisie libre d'un serveur sur la page de connexion (toujours actif en configuration par défaut). */
+  AllowArbitraryServer: z.boolean().default(false),
+  /** Secret partagé avec l'application tierce pour l'authentification signon (jetons HMAC-SHA256). */
+  SignonSecret: z.string().min(16).optional(),
+  /** Stockage des sessions : mémoire (défaut) ou Redis (plusieurs instances derrière un répartiteur). */
+  SessionStore: z
+    .discriminatedUnion('type', [
+      z.object({ type: z.literal('memory') }),
+      z.object({
+        type: z.literal('redis'),
+        url: z.string().default('redis://127.0.0.1:6379'),
+        prefix: z.string().default('jsmydata:'),
+      }),
+    ])
+    .default({ type: 'memory' }),
+  /** Nombre maximal de lignes renvoyées par « Tout afficher ». */
+  MaxShowAllRows: z.coerce.number().int().positive().default(10_000),
+  /** Durée maximale d'une requête lancée depuis l'interface (secondes, 0 = illimitée). */
+  QueryTimeout: z.coerce.number().int().min(0).default(0),
 });
 
 export type ServerConfig = z.infer<typeof serverSchema>;
@@ -107,6 +130,9 @@ function envOverrides(env: NodeJS.ProcessEnv): {
   const mode = pick('JSMYDATA_COLOR_MODE');
   if (mode) raw.ThemeColorMode = mode;
   if (pick('JSMYDATA_TRUST_PROXY') === '1') raw.TrustProxy = true;
+  if (pick('JSMYDATA_ARBITRARY', 'PMA_ARBITRARY') === '1') raw.AllowArbitraryServer = true;
+  const redis = pick('JSMYDATA_REDIS_URL');
+  if (redis) raw.SessionStore = { type: 'redis', url: redis };
 
   const host = pick('JSMYDATA_HOST', 'PMA_HOST');
   if (!host) return { raw };
