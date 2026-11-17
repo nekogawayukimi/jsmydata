@@ -124,9 +124,13 @@ describe.skipIf(!url)('dialecte PostgreSQL', () => {
       user: decodeURIComponent(u.username),
       password: decodeURIComponent(u.password),
     };
-    const running = conn.execute('SELECT pg_sleep(10)', { database: db });
+    // Gestionnaire branché tout de suite : l'annulation peut aboutir avant la fin de cancel().
+    const running = conn.execute('SELECT pg_sleep(10)', { database: db }).then(
+      () => null,
+      (e: unknown) => e,
+    );
     await new Promise((r) => setTimeout(r, 300));
     await postgresDialect.cancel(params, conn.backendId(db)!);
-    await expect(running).rejects.toMatchObject({ sqlState: '57014' });
+    expect(await running).toMatchObject({ sqlState: '57014' });
   });
 });

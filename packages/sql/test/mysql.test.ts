@@ -69,7 +69,8 @@ describe.skipIf(!url)('dialecte MySQL / MariaDB', () => {
       ['id', 'artist', 'id', db],
       ['one', null, null, null],
     ]);
-    expect(r.rows).toEqual([[1, 'Satie', 1, 1]]);
+    // Les BIGINT (dont les littéraux entiers) arrivent en chaîne : aucune perte de précision au-delà de 2^53.
+    expect(r.rows).toEqual([[1, 'Satie', 1, '1']]);
     const i = await conn.execute(`INSERT INTO artist (name) VALUES (?)`, { database: db, params: ['Ravel'] });
     expect(i).toMatchObject({ returnsRows: false, affectedRows: 1, insertId: 2 });
     expect(await conn.uniqueKeys(db, 'artist')).toEqual([['id']]);
@@ -84,11 +85,16 @@ describe.skipIf(!url)('dialecte MySQL / MariaDB', () => {
       user: decodeURIComponent(u.username),
       password: decodeURIComponent(u.password),
     };
-    const running = conn.execute('SELECT SLEEP(10)');
+    const t0 = Date.now();
+    const running = conn.execute('SELECT SLEEP(10)').then(
+      (r) => r,
+      (e: unknown) => e,
+    );
     await new Promise((r) => setTimeout(r, 300));
     await mysqlDialect.cancel(params, conn.backendId()!);
-    // MySQL renvoie 1 (interrompu) ou une erreur 1317 selon la version.
-    const res = await running.catch((e: { errno?: number }) => e);
-    expect(JSON.stringify(res)).toMatch(/1317|\[\[1\]\]/);
+    // SLEEP interrompu renvoie 1 (MySQL) ou l'erreur 1317 (selon la version) : dans les deux cas, bien avant 10 s.
+    const res = await running;
+    expect(Date.now() - t0).toBeLessThan(5000);
+    expect(JSON.stringify(res)).toMatch(/1317|\[\["?1"?\]\]/);
   });
 });
