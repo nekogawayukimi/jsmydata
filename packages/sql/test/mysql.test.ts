@@ -69,8 +69,9 @@ describe.skipIf(!url)('dialecte MySQL / MariaDB', () => {
       ['id', 'artist', 'id', db],
       ['one', null, null, null],
     ]);
-    // Les BIGINT (dont les littéraux entiers) arrivent en chaîne : aucune perte de précision au-delà de 2^53.
-    expect(r.rows).toEqual([[1, 'Satie', 1, '1']]);
+    // Littéral 1 : BIGINT (chaîne, sans perte de précision) sous MySQL, INT (nombre) sous MariaDB.
+    expect(r.rows[0]?.slice(0, 3)).toEqual([1, 'Satie', 1]);
+    expect(String(r.rows[0]?.[3])).toBe('1');
     const i = await conn.execute(`INSERT INTO artist (name) VALUES (?)`, { database: db, params: ['Ravel'] });
     expect(i).toMatchObject({ returnsRows: false, affectedRows: 1, insertId: 2 });
     expect(await conn.uniqueKeys(db, 'artist')).toEqual([['id']]);
