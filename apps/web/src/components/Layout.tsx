@@ -23,6 +23,7 @@ import {
   type TableTab,
 } from '../routes';
 import { meKey, useCurrentServer, useMe } from '../session';
+import { Console } from './Console';
 import { Icon } from './Icon';
 import { Loading } from './Message';
 import { NavigationPanel } from './NavigationPanel';
@@ -42,9 +43,11 @@ export function Layout() {
   if (!srv) return <Navigate to={paths.server(me.data.servers[0]!.id)} replace />;
 
   const logout = async () => {
-    await api.logout();
+    const res = (await api.logout()) as { logoutUrl?: string };
     qc.clear();
-    navigate(paths.login(), { replace: true });
+    // Authentification signon : retour vers le portail de l'application tierce.
+    if (res.logoutUrl) window.location.assign(res.logoutUrl);
+    else navigate(paths.login(), { replace: true });
   };
 
   return (
@@ -58,6 +61,7 @@ export function Layout() {
         <main className="content">
           <Outlet />
         </main>
+        <Console />
       </div>
     </div>
   );

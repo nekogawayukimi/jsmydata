@@ -14,6 +14,7 @@
   "dependencies": {
     "@jsmydata/shared": "*",
     "@jsmydata/sql": "*",
+    "connect-redis": "^11.0.0",
     "express": "^5.3.0",
     "express-session": "^1.19.0",
     "helmet": "^8.3.0",
@@ -21,6 +22,7 @@
     "mysql2": "^3.24.6",
     "pg": "^8.23.1",
     "pino": "^10.4.0",
+    "redis": "^6.3.1",
     "yaml": "^2.9.1",
     "zod": "^4.6.7"
   },

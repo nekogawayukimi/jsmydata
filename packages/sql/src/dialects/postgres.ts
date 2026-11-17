@@ -5,6 +5,8 @@ import {
   type Connection,
   type ConnectionParams,
   type Dialect,
+  type ExecOptions,
+  type ExecResult,
   type QueryResult,
 } from '../types.js';
 
@@ -35,6 +37,13 @@ function toNumber(v: unknown): number | null {
 class PostgresConnection implements Connection {
   readonly engine = 'postgres' as const;
   private readonly clients = new Map<string, Promise<PgClient>>();
+  /** Clients prêts, pour connaître leur identifiant de processus sans attendre. */
+  private readonly ready = new Map<string, PgClient>();
+  /** Schéma placé en tête du search_path, par base. */
+  private readonly searchPath = new Map<string, string>();
+  /** Cache des origines de colonnes (oid de table, numéro de colonne) et des noms de types. */
+  private readonly origins = new Map<string, { schema: string; table: string; column: string }>();
+  private readonly types = new Map<number, string>();
 
   constructor(
     private readonly pg: Pg,
@@ -43,6 +52,7 @@ class PostgresConnection implements Connection {
     first: PgClient,
   ) {
     this.clients.set(defaultDb, Promise.resolve(first));
+    this.ready.set(defaultDb, first);
   }
 
   private client(database?: string): Promise<PgClient> {
@@ -50,7 +60,7 @@ class PostgresConnection implements Connection {
     let c = this.clients.get(db);
     if (!c) {
       c = openClient(this.pg, { ...this.params, database: db });
-      c.catch(() => this.clients.delete(db));
+      c.then((client) => this.ready.set(db, client)).catch(() => this.clients.delete(db));
       this.clients.set(db, c);
     }
     return c;
@@ -181,6 +191,112 @@ class PostgresConnection implements Connection {
     });
   }
 
+  async execute(sql: string, opts: ExecOptions = {}): Promise<ExecResult> {
+    const db = opts.database ?? this.defaultDb;
+    try {
+      const client = await this.client(db);
+      if (opts.schema && this.searchPath.get(db) !== opts.schema) {
+        await client.query(`SET search_path TO ${quoteAnsiIdent(opts.schema)}, public`);
+        this.searchPath.set(db, opts.schema);
+      }
+      const res = await client.query({ text: sql, values: opts.params, rowMode: 'array' });
+      const r = Array.isArray(res) ? res[res.length - 1] : res;
+      const fields = (r.fields ?? []) as {
+        name: string;
+        tableID: number;
+        columnID: number;
+        dataTypeID: number;
+      }[];
+      if (fields.length === 0) {
+        return { returnsRows: false, fields: [], rows: [], affectedRows: r.rowCount ?? 0, insertId: null };
+      }
+      await this.resolveFields(db, fields);
+      const rows = (r.rows ?? []) as unknown[][];
+      const max = opts.maxRows ?? Infinity;
+      return {
+        returnsRows: true,
+        fields: fields.map((f) => {
+          const o = f.tableID ? this.origins.get(`${db}:${f.tableID}:${f.columnID}`) : undefined;
+          return {
+            name: f.name,
+            table: o?.table ?? null,
+            column: o?.column ?? null,
+            schema: o?.schema ?? null,
+            type: this.types.get(f.dataTypeID) ?? null,
+          };
+        }),
+        rows: rows.length > max ? rows.slice(0, max) : rows,
+        truncated: rows.length > max,
+        affectedRows: r.command === 'SELECT' ? undefined : (r.rowCount ?? undefined),
+      };
+    } catch (err) {
+      throw wrap(err);
+    }
+  }
+
+  /** Résout les oid de tables / colonnes et de types en noms (une requête au plus par appel, avec cache). */
+  private async resolveFields(
+    db: string,
+    fields: { tableID: number; columnID: number; dataTypeID: number }[],
+  ) {
+    const client = await this.client(db);
+    const tables = [
+      ...new Set(
+        fields
+          .filter((f) => f.tableID && !this.origins.has(`${db}:${f.tableID}:${f.columnID}`))
+          .map((f) => f.tableID),
+      ),
+    ];
+    if (tables.length) {
+      const res = await client.query(
+        `SELECT c.oid::int AS oid, n.nspname AS schema, c.relname AS table, a.attnum::int AS attnum, a.attname AS column
+           FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+           JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
+          WHERE c.oid = ANY($1::oid[])`,
+        [tables],
+      );
+      for (const r of res.rows)
+        this.origins.set(`${db}:${r.oid}:${r.attnum}`, {
+          schema: r.schema,
+          table: r.table,
+          column: r.column,
+        });
+    }
+    const types = [...new Set(fields.map((f) => f.dataTypeID).filter((t) => !this.types.has(t)))];
+    if (types.length) {
+      const res = await client.query(
+        `SELECT oid::int AS oid, format_type(oid, NULL) AS name FROM pg_type WHERE oid = ANY($1::oid[])`,
+        [types],
+      );
+      for (const r of res.rows) this.types.set(r.oid, r.name);
+    }
+  }
+
+  async uniqueKeys(database: string, table: string, schema = 'public'): Promise<string[][]> {
+    const { rows } = await this.query(
+      `SELECT ic.relname AS idx, array_agg(a.attname::text ORDER BY k.ord) AS cols, bool_or(NOT a.attnotnull) AS nullable
+         FROM pg_index i
+         JOIN pg_class c ON c.oid = i.indrelid
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+         JOIN pg_class ic ON ic.oid = i.indexrelid
+         CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS k(attnum, ord)
+         JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = k.attnum
+        WHERE n.nspname = $1 AND c.relname = $2 AND i.indisunique AND i.indpred IS NULL AND i.indexprs IS NULL
+        GROUP BY i.indisprimary, ic.relname
+        ORDER BY i.indisprimary DESC, ic.relname`,
+      [schema, table],
+      database,
+    );
+    return rows.filter((r) => !r.nullable).map((r) => r.cols as string[]);
+  }
+
+  backendId(database?: string): number | null {
+    return (
+      (this.ready.get(database ?? this.defaultDb) as unknown as { processID?: number } | undefined)
+        ?.processID ?? null
+    );
+  }
+
   async close() {
     const all = [...this.clients.values()];
     this.clients.clear();
@@ -198,6 +314,7 @@ async function openClient(pg: Pg, params: ConnectionParams): Promise<PgClient> {
     connectionTimeoutMillis: params.connectTimeoutMs ?? 10_000,
     ssl: params.ssl === true ? { rejectUnauthorized: false } : params.ssl ? params.ssl : undefined,
     application_name: 'JsMyData',
+    ...(params.queryTimeoutMs ? { statement_timeout: params.queryTimeoutMs } : {}),
   });
   // Une erreur réseau après connexion ne doit pas faire tomber le processus.
   client.on('error', () => undefined);
@@ -227,6 +344,16 @@ export const postgresDialect: Dialect = {
   },
   quoteIdent: quoteAnsiIdent,
   quoteLiteral: quoteAnsiLiteral,
+  qualify: (_database, table, schema) => `${quoteAnsiIdent(schema ?? 'public')}.${quoteAnsiIdent(table)}`,
+  placeholder: (i) => `$${i}`,
+  async cancel(params: ConnectionParams, backendId: number) {
+    const c = await postgresDialect.connect(params);
+    try {
+      await c.query('SELECT pg_cancel_backend($1)', [backendId]);
+    } finally {
+      await c.close();
+    }
+  },
   async connect(params: ConnectionParams): Promise<Connection> {
     const mod = await import('pg');
     const pg = ((mod as unknown as { default?: Pg }).default ?? mod) as Pg;

@@ -1,7 +1,12 @@
 import { useTranslation } from 'react-i18next';
 import { createBrowserRouter, Navigate, RouterProvider, useParams } from 'react-router';
 import { Layout } from './components/Layout';
+import { Browse } from './pages/Browse';
 import { DatabaseStructure } from './pages/DatabaseStructure';
+import { DbSearch } from './pages/DbSearch';
+import { Insert } from './pages/Insert';
+import { SqlPage } from './pages/SqlPage';
+import { TableSearch } from './pages/TableSearch';
 import { Home } from './pages/Home';
 import { Login } from './pages/Login';
 import { Placeholder } from './pages/Placeholder';
@@ -34,15 +39,40 @@ const router = createBrowserRouter([
       { path: 'server/:srv', element: <Home /> },
       {
         path: 'server/:srv/:tab',
-        element: <TabPage tabs={SERVER_TABS} screens={{ databases: () => <ServerDatabases /> }} />,
+        element: (
+          <TabPage
+            tabs={SERVER_TABS}
+            screens={{ databases: () => <ServerDatabases />, sql: () => <SqlPage /> }}
+          />
+        ),
       },
       {
         path: 'server/:srv/db/:db/:tab',
-        element: <TabPage tabs={DATABASE_TABS} screens={{ structure: () => <DatabaseStructure /> }} />,
+        element: (
+          <TabPage
+            tabs={DATABASE_TABS}
+            screens={{
+              structure: () => <DatabaseStructure />,
+              sql: () => <SqlPage />,
+              search: () => <DbSearch />,
+            }}
+          />
+        ),
       },
       {
         path: 'server/:srv/db/:db/table/:table/:tab',
-        element: <TabPage tabs={TABLE_TABS} screens={{ structure: () => <TableStructure /> }} />,
+        element: (
+          <TabPage
+            tabs={TABLE_TABS}
+            screens={{
+              browse: () => <Browse />,
+              structure: () => <TableStructure />,
+              sql: () => <SqlPage />,
+              search: () => <TableSearch />,
+              insert: () => <Insert />,
+            }}
+          />
+        ),
       },
       { path: '*', element: <Navigate to="/" replace /> },
     ],

@@ -41,6 +41,13 @@ export function errorHandler(logger: Logger): ErrorRequestHandler {
         sqlState: err.sqlState,
         errno: err.errno,
       };
+    } else if ((err as { name?: string }).name === 'ZodError') {
+      status = 400;
+      const issue = (err as { issues?: { path: (string | number)[]; message: string }[] }).issues?.[0];
+      body = {
+        code: 'BAD_REQUEST',
+        message: issue ? `Requête invalide (${issue.path.join('.')}) : ${issue.message}` : 'Requête invalide',
+      };
     } else if ((err as { type?: string }).type === 'entity.parse.failed') {
       status = 400;
       body = { code: 'BAD_JSON', message: 'Corps de requête JSON invalide' };

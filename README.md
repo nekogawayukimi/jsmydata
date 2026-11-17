@@ -2,7 +2,7 @@
 
 Administration web de bases **MySQL / MariaDB**, **PostgreSQL** et **SQLite**, avec l'expérience utilisateur de phpMyAdmin, sur une pile 100 % JavaScript : **React** côté client, **Express** (Node.js) côté serveur. Aucun PHP requis.
 
-> État : **lot 0 (socle)**. Connexion, navigation et consultation des structures sont disponibles pour les trois moteurs. Les autres onglets sont présents (parité d'interface) et signalent le lot qui les livrera.
+> État : **lots 0 et 1**. Connexion (cookie, config, http, signon, serveur libre), navigation, structures, Parcourir avec édition en ligne, Insérer / Modifier / Copier / Supprimer, Rechercher (table et base), éditeur SQL multi-instructions et console, pour les trois moteurs. Les autres onglets sont présents (parité d'interface) et signalent le lot qui les livrera.
 
 ## Démarrage rapide (sans configuration)
 
@@ -26,9 +26,11 @@ Sans fichier de configuration, JsMyData :
 | SQLite             | fichiers `.sqlite`, `.sqlite3`, `.db` du dossier de lancement                                                     |
 | Authentification   | `cookie` : identifiants saisis à la connexion, chiffrés en session (AES-256-GCM)                                  |
 | Clé de chiffrement | générée au premier lancement dans `~/.jsmydata/secret` (droits 600)                                               |
-| Thème              | pmahomme, mode **Automatique** (clair ou sombre selon le système)                                                 |
+| Thème              | jmd-default, mode **Automatique** (clair ou sombre selon le système)                                              |
 
 JsMyData refuse de démarrer s'il doit écouter au-delà de la machine locale sans configuration explicite.
+
+Derrière un gestionnaire de processus (PM2, Uxsagi…), utilisez `npm run start:local` : le script installe les dépendances et recompile si nécessaire, puis lance le serveur (`node scripts/start-local.mjs --port 4820`).
 
 ## Configuration
 
